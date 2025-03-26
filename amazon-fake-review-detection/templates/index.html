@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Fake Review Detector</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
+        .container { margin-top: 20px; }
+        textarea { width: 100%; height: 150px; padding: 10px; margin-bottom: 10px; }
+        input[type="text"] { width: 100%; padding: 10px; margin-bottom: 10px; }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; }
+        button { padding: 10px 15px; background-color: #4CAF50; color: white; border: none; cursor: pointer; }
+        .results { margin-top: 20px; border: 1px solid #ddd; padding: 15px; border-radius: 5px; }
+        .fake { color: red; }
+        .genuine { color: green; }
+    </style>
+</head>
+<body>
+    <h1>Fake Review Detector</h1>
+    <p>Enter a review to check if it's likely to be fake or genuine.</p>
+    
+    <div class="container">
+        <div class="form-group">
+            <label for="review">Review Text:</label>
+            <textarea id="review" placeholder="Enter the review text here..."></textarea>
+        </div>
+        
+        <div class="form-group">
+            <label for="title">Review Title (optional):</label>
+            <input type="text" id="title" placeholder="Enter the review title...">
+        </div>
+        
+        <div class="form-group">
+            <label for="rating">Rating (1-5, optional):</label>
+            <input type="number" id="rating" min="1" max="5" step="0.5">
+        </div>
+        
+        <div class="form-group">
+            <label>Verified Purchase:</label>
+            <select id="verified">
+                <option value="">Unknown</option>
+                <option value="Y">Yes</option>
+                <option value="N">No</option>
+            </select>
+        </div>
+        
+        <button onclick="checkReview()">Check Review</button>
+    </div>
+    
+    <div id="results" class="results" style="display: none;">
+        <h2>Results:</h2>
+        <div id="resultsContent"></div>
+    </div>
+    
+    <script>
+        function checkReview() {
+            const review = document.getElementById('review').value;
+            const title = document.getElementById('title').value;
+            const rating = document.getElementById('rating').value;
+            const verified = document.getElementById('verified').value;
+            
+            if (!review) {
+                alert('Please enter a review text');
+                return;
+            }
+            
+            // Send data to the server
+            fetch('/predict', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: new URLSearchParams({
+                    'review': review,
+                    'title': title,
+                    'rating': rating,
+                    'verified': verified
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                // Display results
+                const resultsDiv = document.getElementById('results');
+                const resultsContent = document.getElementById('resultsContent');
+                resultsDiv.style.display = 'block';
+                
+                let html = '<ul>';
+                let fakeCount = 0;
+                let totalModels = 0;
+                
+                for (const [model, result] of Object.entries(data)) {
+                    const prediction = result.prediction;
+                    const confidence = result.confidence;
+                    
+                    let confidenceStr = confidence ? ` (Confidence: ${(confidence * 100).toFixed(2)}%)` : '';
+                    let className = prediction === 'FAKE' ? 'fake' : 'genuine';
+                    
+                    html += `<li><strong>${model}:</strong> <span class="${className}">${prediction}</span>${confidenceStr}</li>`;
+                    
+                    if (prediction === 'FAKE') fakeCount++;
+                    totalModels++;
+                }
+                
+                html += '</ul>';
+                
+                // Overall result
+                const genuineCount = totalModels - fakeCount;
+                let overallResult;
+                
+                if (fakeCount > genuineCount) {
+                    overallResult = `<div class="fake"><strong>OVERALL: LIKELY FAKE</strong> (${fakeCount}/${totalModels} models)</div>`;
+                } else if (genuineCount > fakeCount) {
+                    overallResult = `<div class="genuine"><strong>OVERALL: LIKELY GENUINE</strong> (${genuineCount}/${totalModels} models)</div>`;
+                } else {
+                    overallResult = `<div><strong>OVERALL: UNCERTAIN</strong> (models disagree)</div>`;
+                }
+                
+                resultsContent.innerHTML = html + overallResult;
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred while processing the review');
+            });
+        }
+    </script>
+</body>
+</html>
